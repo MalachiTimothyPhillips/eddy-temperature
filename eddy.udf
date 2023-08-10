@@ -49,6 +49,7 @@ void userq(nrs_t *nrs, double time, occa::memory o_S, occa::memory o_FS)
 {
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
+#if 0
   dpdx(mesh->Nelements,
        mesh->o_vgeo,
        mesh->o_invLMM,
@@ -56,6 +57,9 @@ void userq(nrs_t *nrs, double time, occa::memory o_S, occa::memory o_FS)
        nrs->o_P,
        o_FS);
   oogs::startFinish(o_FS, 1, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
+#else
+  dpdx(mesh->Nlocal, time, mesh->o_x, mesh->o_y, mesh->o_z, o_FS);
+#endif
 }
 
 void UDF_Setup(nrs_t *nrs) {

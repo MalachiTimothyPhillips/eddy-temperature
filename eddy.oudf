@@ -81,6 +81,20 @@ void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat vis
   (*pp) = p;
 }
 
+void dP(dfloat *dpdx, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat visc)
+{
+  const dfloat e = exp(-50 * time * visc);
+
+  const dfloat x = xx - p_U0 * time;
+  const dfloat y = yy - p_V0 * time;
+
+  dfloat dp = e / 64.0;
+  dp *= -96 * sin(6 * x) + 64 * sin(2 * x - 4 * y) - 64 * sin(2 * x + 4 * y) - 64 * sin(8 * x - 4 * y) +
+        64 * sin(8 * x + 4 * y) - 12 * cos(3 * x - 9 * y) + 108 * cos(3 * x - y) + 108 * cos(3 * x + y) -
+        12 * cos(3 * x + 9 * y) + 160 * cos(5 * x - 5 * y) - 160 * cos(5 * x + 5 * y);
+  (*dpdx) = dp;
+}
+
 @kernel void exactUVWP(const dlong Ntotal,
                        const dlong offset,
                        const dfloat time,
@@ -122,71 +136,19 @@ void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat vis
   }
 }
 
-@kernel void dpdx(const dlong Nelements,
-                  @ restrict const dfloat *vgeo,
-                  @ restrict const dfloat *invLMM,
-                  @ restrict const dfloat *D,
-                  @ restrict const dfloat *P,
-                  @ restrict dfloat *dp)
+@kernel void dpdx(const dlong Ntotal,
+                  const dfloat time,
+                  @ restrict const dfloat *X,
+                  @ restrict const dfloat *Y,
+                  @ restrict const dfloat *Z,
+                  @ restrict dfloat *FS)
 {
-  for (dlong e = 0; e < Nelements; e++; @outer(0)) { // for all elements
-    @shared dfloat s_P[p_Nq][p_Nq];
-    @exclusive dfloat s_Ploc[p_Nq];
-    @shared dfloat s_D[p_Nq][p_Nq];
-
-#ifdef smXX
-#pragma unroll p_Nq
-#endif
-    for (int k = 0; k < p_Nq; ++k) {
-      for (int j = 0; j < p_Nq; ++j; @inner(1)) {
-        for (int i = 0; i < p_Nq; ++i; @inner(0)) {
-          const dlong id = e * p_Np + k * p_Nq * p_Nq + j * p_Nq + i;
-
-          s_P[j][i] = P[id];
-
-          if (k == 0) {
-            s_D[j][i] = D[j * p_Nq + i];
-          }
-          if (k == 0) {
-#pragma unroll p_Nq
-            for (int l = 0; l < p_Nq; ++l) {
-              const dlong other_id = e * p_Np + l * p_Nq * p_Nq + j * p_Nq + i;
-              s_Ploc[l] = P[other_id];
-            }
-          }
-        }
-      }
-
-      // Make sure all node data is loaded into @shared
-      @barrier();
-      for (int j = 0; j < p_Nq; ++j; @inner(1)) {
-        for (int i = 0; i < p_Nq; ++i; @inner(0)) {
-          const dlong gid = e * p_Np * p_Nvgeo + k * p_Nq * p_Nq + j * p_Nq + i;
-          const dlong id = e * p_Np + k * p_Nq * p_Nq + j * p_Nq + i;
-          const dfloat drdx = vgeo[gid + p_RXID * p_Np];
-          const dfloat dsdx = vgeo[gid + p_SXID * p_Np];
-          const dfloat dtdx = vgeo[gid + p_TXID * p_Np];
-          const dfloat JW = vgeo[gid + p_JWID * p_Np];
-          const dfloat imm = invLMM[id];
-
-          // compute 'r' and 's' derivatives of (q_m) at node n
-          dfloat dpdr = 0.f, dpds = 0.f, dpdt = 0.f;
-
-#pragma unroll p_Nq
-          for (int n = 0; n < p_Nq; ++n) {
-            const dfloat Dr = s_D[i][n];
-            const dfloat Ds = s_D[j][n];
-            const dfloat Dt = s_D[k][n];
-
-            dpdr += Dr * s_P[j][n];
-            dpds += Ds * s_P[n][i];
-            dpdt += Dt * s_Ploc[n];
-          }
-
-          dp[id] = -imm * JW * (drdx * dpdr + dsdx * dpds + dtdx * dpdt);
-        }
-      }
-      @barrier();
-    } // k-loop
+  for (dlong n = 0; n < Ntotal; ++n; @tile(p_blockSize, @outer, @inner)) {
+    dfloat dpdx;
+    const dfloat x = X[n];
+    const dfloat y = Y[n];
+    const dfloat z = Z[n];
+    dP(&dpdx, x, y, z, time, p_visc);
+    FS[n] = -dpdx;
   }
 }
