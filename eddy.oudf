@@ -68,26 +68,27 @@ void exact(dfloat *uu, dfloat *vv, dfloat *ww, dfloat xx, dfloat yy, dfloat zz, 
 
 void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat visc)
 {
-  const dfloat e = exp(-50*time*visc);
+  const dfloat e = exp(-50 * time * visc);
 
-  const dfloat x = xx - p_U0*time;
-  const dfloat y = yy - p_V0*time;
+  const dfloat x = xx - p_U0 * time;
+  const dfloat y = yy - p_V0 * time;
 
-  (*pp) = (1.0/64.0)*e*(16*cos(6*x) + 8*cos(8*x-4*y)
-     - 32*cos(2*(x-2*y)) + 9*cos(8*y) - 8*cos(4*(2*x+y))
-     + 32*cos(2*(x+2*y)) - 4*sin(3*(x-3*y)) + 32*sin(5*(x-y))
-     + 36*sin(3*x-y) - 32*sin(5*(x+y)) + 36*sin(3*x+y)
-     - 4*sin(3*(x+3*y)));
+  dfloat p = e / 64.0;
+  p *= (16 * cos(6 * x) + 8 * cos(8 * x - 4 * y) - 32 * cos(2 * (x - 2 * y)) + 9 * cos(8 * y) -
+        8 * cos(4 * (2 * x + y)) + 32 * cos(2 * (x + 2 * y)) - 4 * sin(3 * (x - 3 * y)) +
+        32 * sin(5 * (x - y)) + 36 * sin(3 * x - y) - 32 * sin(5 * (x + y)) + 36 * sin(3 * x + y) -
+        4 * sin(3 * (x + 3 * y)));
+  (*pp) = p;
 }
 
 @kernel void exactUVWP(const dlong Ntotal,
-                      const dlong offset,
-                      const dfloat time,
-                      @ restrict const dfloat *X,
-                      @ restrict const dfloat *Y,
-                      @ restrict const dfloat *Z,
-                      @ restrict dfloat *U,
-                      @ restrict dfloat *P)
+                       const dlong offset,
+                       const dfloat time,
+                       @ restrict const dfloat *X,
+                       @ restrict const dfloat *Y,
+                       @ restrict const dfloat *Z,
+                       @ restrict dfloat *U,
+                       @ restrict dfloat *P)
 {
   for (dlong n = 0; n < Ntotal; ++n; @tile(p_blockSize, @outer, @inner)) {
     dfloat u, v, w, p;
@@ -122,11 +123,11 @@ void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat vis
 }
 
 @kernel void dpdx(const dlong Nelements,
-                                 @ restrict const dfloat *vgeo,
-                                 @ restrict const dfloat *invLMM,
-                                 @ restrict const dfloat *D,
-                                 @ restrict const dfloat *P,
-                                 @ restrict dfloat *dp)
+                  @ restrict const dfloat *vgeo,
+                  @ restrict const dfloat *invLMM,
+                  @ restrict const dfloat *D,
+                  @ restrict const dfloat *P,
+                  @ restrict dfloat *dp)
 {
   for (dlong e = 0; e < Nelements; e++; @outer(0)) { // for all elements
     @shared dfloat s_P[p_Nq][p_Nq];
@@ -143,8 +144,9 @@ void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat vis
 
           s_P[j][i] = P[id];
 
-          if (k == 0)
+          if (k == 0) {
             s_D[j][i] = D[j * p_Nq + i];
+          }
           if (k == 0) {
 #pragma unroll p_Nq
             for (int l = 0; l < p_Nq; ++l) {
