@@ -66,23 +66,40 @@ void exact(dfloat *uu, dfloat *vv, dfloat *ww, dfloat xx, dfloat yy, dfloat zz, 
   (*ww) = 0.0;
 }
 
-@kernel void exactUVW(const dlong Ntotal,
+void exactP(dfloat *pp, dfloat xx, dfloat yy, dfloat zz, dfloat time, dfloat visc)
+{
+  const dfloat e = exp(-50*time*visc);
+
+  const dfloat x = xx - p_U0*time;
+  const dfloat y = yy - p_V0*time;
+
+  (*pp) = (1.0/64.0)*e*(16*cos(6*x) + 8*cos(8*x-4*y)
+     - 32*cos(2*(x-2*y)) + 9*cos(8*y) - 8*cos(4*(2*x+y))
+     + 32*cos(2*(x+2*y)) - 4*sin(3*(x-3*y)) + 32*sin(5*(x-y))
+     + 36*sin(3*x-y) - 32*sin(5*(x+y)) + 36*sin(3*x+y)
+     - 4*sin(3*(x+3*y)));
+}
+
+@kernel void exactUVWP(const dlong Ntotal,
                       const dlong offset,
                       const dfloat time,
                       @ restrict const dfloat *X,
                       @ restrict const dfloat *Y,
                       @ restrict const dfloat *Z,
-                      @ restrict dfloat *U)
+                      @ restrict dfloat *U,
+                      @ restrict dfloat *P)
 {
   for (dlong n = 0; n < Ntotal; ++n; @tile(p_blockSize, @outer, @inner)) {
-    dfloat u, v, w;
+    dfloat u, v, w, p;
     const dfloat x = X[n];
     const dfloat y = Y[n];
     const dfloat z = Z[n];
     exact(&u, &v, &w, x, y, z, time, p_visc);
+    exactP(&p, x, y, z, time, p_visc);
     U[n + 0 * offset] = u;
     U[n + 1 * offset] = v;
     U[n + 2 * offset] = w;
+    P[n] = p;
   }
 }
 

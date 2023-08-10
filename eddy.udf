@@ -58,7 +58,6 @@ void userq(nrs_t *nrs, double time, occa::memory o_S, occa::memory o_FS)
   oogs::startFinish(o_FS, 1, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
 }
 
-
 void UDF_Setup(nrs_t *nrs) {
   udf.sEqnSource = &userq;
 }
@@ -73,13 +72,16 @@ void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
 
   constexpr int nStepAnalytical = 5;
   if (tstep <= nStepAnalytical) {
-    exactUVW(mesh->Nlocal, nrs->fieldOffset, time, mesh->o_x, mesh->o_y, mesh->o_z, nrs->o_U);
+    exactUVWP(mesh->Nlocal, nrs->fieldOffset, time, mesh->o_x, mesh->o_y, mesh->o_z, nrs->o_U, nrs->o_P);
     nrs->o_U.copyTo(nrs->cds->o_S, nrs->fieldOffset);
+    ellipticZeroMean(nrs->pSolver, nrs->o_P);
   }
 
   auto o_Uexact = platform->o_memPool.reserve<dfloat>(nrs->NVfields * nrs->fieldOffset);
+  auto o_Pexact = platform->o_memPool.reserve<dfloat>(nrs->fieldOffset);
   auto o_Sexact = platform->o_memPool.reserve<dfloat>(nrs->fieldOffset);
-  exactUVW(mesh->Nlocal, nrs->fieldOffset, time, mesh->o_x, mesh->o_y, mesh->o_z, o_Uexact);
+  exactUVWP(mesh->Nlocal, nrs->fieldOffset, time, mesh->o_x, mesh->o_y, mesh->o_z, o_Uexact, o_Pexact);
+  ellipticZeroMean(nrs->pSolver, o_Pexact);
   o_Uexact.copyTo(o_Sexact, nrs->fieldOffset);
 
   platform->linAlg->axpbyMany(mesh->Nlocal,
@@ -89,6 +91,7 @@ void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
     nrs->o_U,
     -1.0,
     o_Uexact);
+  platform->linAlg->axpby(mesh->Nlocal, 1.0, nrs->o_P, -1.0, o_Pexact);
   platform->linAlg->axpby(mesh->Nlocal, 1.0, nrs->cds->o_S, -1.0, o_Sexact);
   
   auto o_UerrX = o_Uexact + 0 * nrs->fieldOffset;
@@ -98,14 +101,16 @@ void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
   platform->linAlg->abs(mesh->Nlocal, o_UerrX);
   platform->linAlg->abs(mesh->Nlocal, o_UerrY);
   platform->linAlg->abs(mesh->Nlocal, o_UerrZ);
+  platform->linAlg->abs(mesh->Nlocal, o_Pexact);
   platform->linAlg->abs(mesh->Nlocal, o_Sexact);
 
   const auto LinfUx = platform->linAlg->max(mesh->Nlocal, o_UerrX, platform->comm.mpiCommParent);
   const auto LinfUy = platform->linAlg->max(mesh->Nlocal, o_UerrY, platform->comm.mpiCommParent);
   const auto LinfUz = platform->linAlg->max(mesh->Nlocal, o_UerrZ, platform->comm.mpiCommParent);
+  const auto LinfP = platform->linAlg->max(mesh->Nlocal, o_Pexact, platform->comm.mpiCommParent);
   const auto LinfS = platform->linAlg->max(mesh->Nlocal, o_Sexact, platform->comm.mpiCommParent);
 
   if(platform->comm.mpiRank == 0){
-    printf("LinfUx = %g, LinfUy = %g, LinfUz = %g, LinfS = %g\n", LinfUx, LinfUy, LinfUz, LinfS);
+    printf("LinfUx = %g, LinfUy = %g, LinfUz = %g, LinfP = %g, LinfS = %g\n", LinfUx, LinfUy, LinfUz, LinfP, LinfS);
   }
 }
