@@ -185,6 +185,16 @@ c-----------------------------------------------------------------------
       return
       end
 c-----------------------------------------------------------------------
+      subroutine usrdat0
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKNEK'
+
+      param(32) = 1 ! re2 contains just velocity
+
+      return
+      end
+c-----------------------------------------------------------------------
       subroutine usrdat2
       include 'SIZE'
       include 'TOTAL'
@@ -207,20 +217,13 @@ c-----------------------------------------------------------------------
       call rescale_x(ym1, 0.0,twopi)
       call rescale_x(zm1, 0.0,1.0)
 
+      ! for periodic kludge in z
       do iel=1,nelt
       do ifc=5,6
-         cbc(ifc,iel,1) = 'P  ' ! required for kludge (see below)
+         cbc(ifc,iel,1) = 'P  '
       enddo
       enddo
       
-      !do iel=1,nelt
-      !do ifc=1,2*ndim
-      !   if (cbc(ifc,iel,1) .eq. 'int') then 
-      !     boundaryID(ifc,iel) = 1
-      !   endif
-      !enddo
-      !enddo
-
       return
       end
 c----------------------------------------------------------------------
@@ -231,7 +234,6 @@ C-----------------------------------------------------------------------
       subroutine usrsetvert(glo_num,nel,nx,ny,nz) ! to modify glo_num
       integer*8 glo_num(1)
 
-      ! kludge for periodic bc in z
       nxy  = nx*ny
       nxyz = nx*ny*nz
       do iel = 1,nel
@@ -243,4 +245,3 @@ C-----------------------------------------------------------------------
 
       return
       end
-c----------------------------------------------------------------------
